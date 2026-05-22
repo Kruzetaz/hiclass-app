@@ -18,6 +18,7 @@ const AVATAR_COLORS = ['#6C5CE7','#10b981','#e17055','#f59e0b','#3b82f6','#8b5cf
 export default function RoomPage() {
   const [room, setRoom] = useState(null)
   const [students, setStudents] = useState([])
+  const [quickStats, setQuickStats] = useState({ attendance: null, food: null, savings: null })
   const [loading, setLoading] = useState(true)
   const [hoveredMenu, setHoveredMenu] = useState(null)
   const router = useRouter()
@@ -30,12 +31,50 @@ export default function RoomPage() {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
-    const [{ data: roomData }, { data: studs }] = await Promise.all([
+
+    // วันนี้ในรูปแบบ YYYY-MM-DD
+    const todayStr = new Date().toISOString().split('T')[0]
+
+    const [
+      { data: roomData },
+      { data: studs },
+      { data: attendanceData },
+      { data: foodData },
+      { data: savingsData },
+    ] = await Promise.all([
       supabase.from('rooms').select('*').eq('id', roomId).single(),
-      supabase.from('students').select('*').eq('room_id', roomId).eq('is_active', true).order('sort_order'),
+      supabase.from('students').select('*').eq('room_id', roomId).eq('is_active', true),
+      // เช็คชื่อวันนี้ — นับเฉพาะ status = 'present'
+      supabase.from('attendance')
+        .select('id', { count: 'exact' })
+        .eq('room_id', roomId)
+        .eq('date', todayStr)
+        .eq('status', 'present'),
+      // อาหารวันนี้
+      supabase.from('food_records')
+        .select('id', { count: 'exact' })
+        .eq('room_id', roomId)
+        .eq('date', todayStr),
+      // ออมเงินรวมทั้งหมด
+      supabase.from('savings')
+        .select('amount')
+        .eq('room_id', roomId),
     ])
+
     setRoom(roomData)
-    setStudents(studs || [])
+    // เรียงตาม seat_number ถ้ามี
+    const sorted = (studs || []).sort((a, b) => (a.seat_number ?? 9999) - (b.seat_number ?? 9999))
+    setStudents(sorted)
+
+    // คำนวณออมเงินรวม
+    const totalSavings = (savingsData || []).reduce((sum, r) => sum + (r.amount || 0), 0)
+
+    setQuickStats({
+      attendance: attendanceData?.length ?? 0,
+      food: foodData?.length ?? 0,
+      savings: totalSavings,
+    })
+
     setLoading(false)
   }
 
@@ -48,6 +87,13 @@ export default function RoomPage() {
   )
 
   const today = new Date().toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+
+  // format ตัวเลขออมเงิน
+  const formatSavings = (val) => {
+    if (val === null) return '—'
+    if (val >= 1000) return `${(val / 1000).toFixed(1)}k`
+    return `${val} ฿`
+  }
 
   return (
     <>
@@ -66,23 +112,14 @@ export default function RoomPage() {
       <div style={{ minHeight: '100vh', background: '#f4f5f7', fontFamily: 'Noto Sans Thai, sans-serif' }}>
 
         {/* ── Header ── */}
-        <div style={{
-          background: 'linear-gradient(135deg, #1a1f2e 0%, #252d42 100%)',
-          padding: '0 0 0 0',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-        }}>
-          {/* Topbar */}
+        <div style={{ background: 'linear-gradient(135deg, #1a1f2e 0%, #252d42 100%)', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }}>
           <div style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid #252b3b' }}>
             <button onClick={() => router.push('/dashboard')} style={{
               background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
               borderRadius: 8, padding: '5px 12px', cursor: 'pointer',
-              color: '#e2e8f0', fontSize: 12, fontFamily: 'inherit', transition: 'all 0.15s',
+              color: '#e2e8f0', fontSize: 12, fontFamily: 'inherit',
               display: 'flex', alignItems: 'center', gap: 5,
-            }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.14)' }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)' }}>
-              ← กลับ
-            </button>
+            }}>← กลับ</button>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9' }}>{room?.name}</div>
               <div style={{ fontSize: 11, color: '#6b7280' }}>
@@ -91,13 +128,11 @@ export default function RoomPage() {
             </div>
             <Link href={`/room/${roomId}/students`} style={{
               background: 'linear-gradient(135deg, #f5c842, #e6a800)',
-              border: 'none', borderRadius: 8, padding: '6px 14px', cursor: 'pointer',
+              border: 'none', borderRadius: 8, padding: '6px 14px',
               color: '#1a1f2e', fontSize: 11, fontWeight: 700, textDecoration: 'none',
               display: 'flex', alignItems: 'center', gap: 4,
               boxShadow: '0 3px 10px rgba(245,200,66,0.35)',
-            }}>
-              👥 จัดการนักเรียน
-            </Link>
+            }}>👥 จัดการนักเรียน</Link>
           </div>
 
           {/* Stats strip */}
@@ -133,7 +168,7 @@ export default function RoomPage() {
                 onMouseEnter={() => setHoveredMenu(i)}
                 onMouseLeave={() => setHoveredMenu(null)}
                 style={{
-                  background: hoveredMenu === i ? '#ffffff' : '#ffffff',
+                  background: '#ffffff',
                   border: `1px solid ${hoveredMenu === i ? menu.color : '#e8eaed'}`,
                   boxShadow: hoveredMenu === i
                     ? `0 8px 24px rgba(0,0,0,0.08), 0 0 0 2px ${menu.border}`
@@ -155,12 +190,24 @@ export default function RoomPage() {
             ))}
           </div>
 
-          {/* ── Quick Stats ── */}
+          {/* ── Quick Stats (ข้อมูลจริง) ── */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 20 }}>
             {[
-              { label: 'เช็คชื่อวันนี้', val: '—', color: '#10b981', bg: '#ecfdf5', border: '#a7f3d0' },
-              { label: 'รับอาหารแล้ว', val: '—', color: '#f59e0b', bg: '#fffbeb', border: '#fde68a' },
-              { label: 'ออมเงินรวม',   val: '—', color: '#f5c842', bg: '#fef9ec', border: '#fde68a' },
+              {
+                label: 'เช็คชื่อวันนี้',
+                val: quickStats.attendance === null ? '—' : `${quickStats.attendance}/${students.length}`,
+                color: '#10b981', bg: '#ecfdf5', border: '#a7f3d0',
+              },
+              {
+                label: 'รับอาหารแล้ว',
+                val: quickStats.food === null ? '—' : `${quickStats.food}/${students.length}`,
+                color: '#f59e0b', bg: '#fffbeb', border: '#fde68a',
+              },
+              {
+                label: 'ออมเงินรวม',
+                val: formatSavings(quickStats.savings),
+                color: '#f5c842', bg: '#fef9ec', border: '#fde68a',
+              },
             ].map((s, i) => (
               <div key={i} style={{
                 background: s.bg, border: `1px solid ${s.border}`,
@@ -176,12 +223,10 @@ export default function RoomPage() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontSize: 14 }}>👤</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>
-                รายชื่อนักเรียน
-              </span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>รายชื่อนักเรียน</span>
               <span style={{ fontSize: 11, color: '#9ca3af' }}>({students.length} คน)</span>
             </div>
-            <Link href={`/room/${roomId}/students`} style={{ fontSize: 11, color: '#f5c842', fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}>
+            <Link href={`/room/${roomId}/students`} style={{ fontSize: 11, color: '#f5c842', fontWeight: 700, textDecoration: 'none' }}>
               จัดการทั้งหมด →
             </Link>
           </div>
@@ -198,9 +243,7 @@ export default function RoomPage() {
                   color: '#1a1f2e', padding: '8px 16px', borderRadius: 8,
                   fontSize: 12, fontWeight: 700, textDecoration: 'none',
                   boxShadow: '0 3px 10px rgba(245,200,66,0.3)',
-                }}>
-                  + เพิ่มนักเรียนคนแรก
-                </Link>
+                }}>+ เพิ่มนักเรียนคนแรก</Link>
               </div>
             ) : (
               <>
@@ -208,21 +251,20 @@ export default function RoomPage() {
                   <div key={s.id} className="stu-row">
                     <div style={{
                       width: 32, height: 32, borderRadius: '50%',
-                      background: AVATAR_COLORS[i % AVATAR_COLORS.length],
+                      background: s.gender === 'female' ? '#f472b6' : s.gender === 'male' ? '#60a5fa' : AVATAR_COLORS[i % AVATAR_COLORS.length],
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: 11, fontWeight: 700, color: '#fff', flexShrink: 0,
-                    }}>
-                      {s.full_name[0]}
-                    </div>
+                    }}>{s.full_name[0]}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 500, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {s.full_name}
                       </div>
-                      {s.code && (
-                        <div style={{ fontSize: 10, color: '#9ca3af' }}>รหัส {s.code}</div>
-                      )}
+                      {s.code && <div style={{ fontSize: 10, color: '#9ca3af' }}>รหัส {s.code}</div>}
                     </div>
-                    <div style={{ fontSize: 11, color: '#d1d5db', fontWeight: 500 }}>#{i + 1}</div>
+                    {/* แสดงเลขที่จริง ถ้าไม่มีใช้ลำดับในอาร์เรย์ */}
+                    <div style={{ fontSize: 11, color: '#d1d5db', fontWeight: 500 }}>
+                      #{s.seat_number ?? i + 1}
+                    </div>
                   </div>
                 ))}
                 {students.length > 6 && (
@@ -231,9 +273,7 @@ export default function RoomPage() {
                     fontSize: 12, color: '#f5c842', fontWeight: 600,
                     textDecoration: 'none', background: '#fffbeb',
                     borderTop: '1px solid #fef3c7',
-                  }}>
-                    ดูทั้งหมด {students.length} คน →
-                  </Link>
+                  }}>ดูทั้งหมด {students.length} คน →</Link>
                 )}
               </>
             )}
@@ -246,10 +286,7 @@ export default function RoomPage() {
               background: 'linear-gradient(135deg, #1a1f2e, #252d42)',
               border: '1px solid #2d3449', borderRadius: 12, padding: '12px 16px',
               boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
-              transition: 'all 0.2s',
-            }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.2)' }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)' }}>
+            }}>
               <div style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>✅</div>
               <div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#f1f5f9' }}>เช็คชื่อวันนี้</div>
@@ -259,10 +296,8 @@ export default function RoomPage() {
             <Link href={`/room/${roomId}/students`} style={{
               display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none',
               background: '#ffffff', border: '1px solid #e8eaed', borderRadius: 12, padding: '12px 16px',
-              boxShadow: '0 1px 4px rgba(0,0,0,0.05)', transition: 'all 0.2s',
-            }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = '#f5c842'; e.currentTarget.style.transform = 'translateY(-2px)' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = '#e8eaed'; e.currentTarget.style.transform = 'none' }}>
+              boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+            }}>
               <div style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(245,200,66,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>➕</div>
               <div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: '#111827' }}>เพิ่มนักเรียน</div>

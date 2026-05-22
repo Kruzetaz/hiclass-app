@@ -2,9 +2,14 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '../../../../lib/supabase'
 import { useRouter, useParams } from 'next/navigation'
-import Link from 'next/link'
 
 const AVATAR_COLORS = ['#6C5CE7','#10b981','#e17055','#f59e0b','#3b82f6','#8b5cf6','#ec4899','#06b6d4']
+
+const GENDER_OPTIONS = [
+  { value: '', label: 'ไม่ระบุ' },
+  { value: 'male', label: '👦 ชาย' },
+  { value: 'female', label: '👧 หญิง' },
+]
 
 export default function StudentsPage() {
   const [students, setStudents] = useState([])
@@ -13,6 +18,8 @@ export default function StudentsPage() {
   const [showAdd, setShowAdd] = useState(false)
   const [newName, setNewName] = useState('')
   const [newCode, setNewCode] = useState('')
+  const [newSeatNumber, setNewSeatNumber] = useState('')
+  const [newGender, setNewGender] = useState('')
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
   const router = useRouter()
@@ -28,11 +35,24 @@ export default function StudentsPage() {
     const [{ data: roomData }, { data: studs }] = await Promise.all([
       supabase.from('rooms').select('*').eq('id', roomId).single(),
       supabase.from('students').select('*').eq('room_id', roomId)
-        .eq('is_active', true).order('sort_order').order('created_at'),
+        .eq('is_active', true),
     ])
     setRoom(roomData)
-    setStudents(studs || [])
+    // เรียงตาม seat_number ก่อน ถ้าไม่มีให้ไปท้ายสุด
+    const sorted = (studs || []).sort((a, b) => {
+      const an = a.seat_number ?? 9999
+      const bn = b.seat_number ?? 9999
+      return an - bn
+    })
+    setStudents(sorted)
     setLoading(false)
+  }
+
+  function resetForm() {
+    setNewName('')
+    setNewCode('')
+    setNewSeatNumber('')
+    setNewGender('')
   }
 
   async function addStudent() {
@@ -43,9 +63,12 @@ export default function StudentsPage() {
       room_id: roomId,
       full_name: newName.trim(),
       code: newCode.trim() || null,
-      sort_order: students.length + 1,
+      seat_number: newSeatNumber ? parseInt(newSeatNumber) : null,
+      gender: newGender || null,
+      sort_order: newSeatNumber ? parseInt(newSeatNumber) : students.length + 1,
     })
-    setNewName(''); setNewCode(''); setShowAdd(false)
+    resetForm()
+    setShowAdd(false)
     await loadData()
     setSaving(false)
   }
@@ -59,8 +82,15 @@ export default function StudentsPage() {
 
   const filtered = students.filter(s =>
     s.full_name.toLowerCase().includes(search.toLowerCase()) ||
-    (s.code || '').includes(search)
+    (s.code || '').includes(search) ||
+    (s.seat_number?.toString() || '').includes(search)
   )
+
+  const genderLabel = (g) => {
+    if (g === 'male') return { text: 'ชาย', color: '#3b82f6', bg: '#eff6ff' }
+    if (g === 'female') return { text: 'หญิง', color: '#ec4899', bg: '#fdf2f8' }
+    return null
+  }
 
   if (loading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f4f5f7', fontFamily: 'Noto Sans Thai, sans-serif' }}>
@@ -70,6 +100,10 @@ export default function StudentsPage() {
     </div>
   )
 
+  // นับชาย/หญิง
+  const maleCount = students.filter(s => s.gender === 'male').length
+  const femaleCount = students.filter(s => s.gender === 'female').length
+
   return (
     <>
       <style>{`
@@ -77,7 +111,6 @@ export default function StudentsPage() {
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Noto Sans Thai', sans-serif; }
         @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .stu-row { display: flex; align-items: center; gap: 12px; padding: 11px 16px; border-bottom: 1px solid #f3f4f6; transition: background 0.1s; }
         .stu-row:hover { background: #fafafa; }
         .stu-row:last-child { border-bottom: none; }
@@ -87,6 +120,8 @@ export default function StudentsPage() {
         .search-input:focus { border-color: #f5c842; box-shadow: 0 0 0 3px rgba(245,200,66,0.12); }
         .field-input { background: #f9fafb; border: 1.5px solid #e5e7eb; border-radius: 8px; padding: 9px 12px; font-size: 13px; color: #111827; outline: none; width: 100%; font-family: inherit; transition: border-color 0.15s; }
         .field-input:focus { border-color: #f5c842; box-shadow: 0 0 0 3px rgba(245,200,66,0.12); }
+        .field-select { background: #f9fafb; border: 1.5px solid #e5e7eb; border-radius: 8px; padding: 9px 12px; font-size: 13px; color: #111827; outline: none; width: 100%; font-family: inherit; transition: border-color 0.15s; cursor: pointer; appearance: none; }
+        .field-select:focus { border-color: #f5c842; box-shadow: 0 0 0 3px rgba(245,200,66,0.12); }
       `}</style>
 
       <div style={{ minHeight: '100vh', background: '#f4f5f7', fontFamily: 'Noto Sans Thai, sans-serif' }}>
@@ -113,35 +148,38 @@ export default function StudentsPage() {
             }}>+ เพิ่มนักเรียน</button>
           </div>
 
-          {/* Stats */}
-          <div style={{ padding: '14px 20px 16px', display: 'flex', gap: 20, alignItems: 'center' }}>
+          {/* Stats — เพิ่มนับชาย/หญิง */}
+          <div style={{ padding: '14px 20px 16px', display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
             {[
-              { label: 'นักเรียนทั้งหมด', val: students.length, icon: '👥', color: '#f5c842' },
-              { label: 'ใช้งานอยู่', val: students.length, icon: '✅', color: '#10b981' },
+              { label: 'ทั้งหมด', val: students.length, icon: '👥', color: '#f5c842' },
+              { label: 'นักเรียนชาย', val: maleCount, icon: '👦', color: '#60a5fa' },
+              { label: 'นักเรียนหญิง', val: femaleCount, icon: '👧', color: '#f472b6' },
             ].map((s, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {i > 0 && <div style={{ width: 1, height: 28, background: '#252b3b', marginRight: 8 }} />}
                 <span style={{ fontSize: 16 }}>{s.icon}</span>
                 <div>
                   <div style={{ fontSize: 18, fontWeight: 700, color: s.color, lineHeight: 1.2 }}>{s.val}</div>
                   <div style={{ fontSize: 10, color: '#4b5563' }}>{s.label}</div>
                 </div>
-                {i < 1 && <div style={{ width: 1, height: 28, background: '#252b3b', marginLeft: 8 }} />}
               </div>
             ))}
           </div>
         </div>
 
-        <div style={{ maxWidth: 640, margin: '0 auto', padding: '20px 16px' }}>
+        <div style={{ maxWidth: 680, margin: '0 auto', padding: '20px 16px' }}>
 
           {/* Add Form */}
           {showAdd && (
             <div style={{ background: '#ffffff', border: '1px solid #e9eaec', borderRadius: 16, padding: '20px', marginBottom: 16, boxShadow: '0 4px 16px rgba(0,0,0,0.08)', animation: 'slideUp 0.2s ease' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>➕ เพิ่มนักเรียนใหม่</div>
-                <button onClick={() => { setShowAdd(false); setNewName(''); setNewCode('') }}
+                <button onClick={() => { setShowAdd(false); resetForm() }}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 18 }}>✕</button>
               </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+                {/* ชื่อ-นามสกุล (full width) */}
                 <div style={{ gridColumn: 'span 2' }}>
                   <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     ชื่อ-นามสกุล *
@@ -151,15 +189,44 @@ export default function StudentsPage() {
                     onKeyDown={e => e.key === 'Enter' && addStudent()}
                     placeholder="เด็กชายสมชาย ใจดี" />
                 </div>
+
+                {/* เลขที่ */}
                 <div>
                   <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    รหัสนักเรียน
+                    เลขที่
+                  </label>
+                  <input className="field-input" type="number" min="1" max="99"
+                    value={newSeatNumber}
+                    onChange={e => setNewSeatNumber(e.target.value)}
+                    placeholder="เช่น 1, 2, 3..." />
+                </div>
+
+                {/* เพศ */}
+                <div>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    เพศ
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <select className="field-select" value={newGender} onChange={e => setNewGender(e.target.value)}>
+                      {GENDER_OPTIONS.map(o => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                    <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#9ca3af', fontSize: 11 }}>▾</span>
+                  </div>
+                </div>
+
+                {/* รหัสนักเรียน */}
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    รหัสนักเรียน <span style={{ fontWeight: 400, textTransform: 'none' }}>(ไม่บังคับ)</span>
                   </label>
                   <input className="field-input" value={newCode}
                     onChange={e => setNewCode(e.target.value)}
-                    placeholder="เช่น 1234" />
+                    placeholder="เช่น 67001" />
                 </div>
               </div>
+
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={addStudent} disabled={saving || !newName.trim()} style={{
                   flex: 1, padding: '10px', borderRadius: 8, border: 'none', cursor: 'pointer',
@@ -170,7 +237,7 @@ export default function StudentsPage() {
                 }}>
                   {saving ? '⏳ กำลังบันทึก...' : '✓ บันทึก'}
                 </button>
-                <button onClick={() => { setShowAdd(false); setNewName(''); setNewCode('') }} style={{
+                <button onClick={() => { setShowAdd(false); resetForm() }} style={{
                   padding: '10px 20px', borderRadius: 8, cursor: 'pointer',
                   background: '#f4f5f7', border: '1px solid #e5e7eb',
                   color: '#6b7280', fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
@@ -183,7 +250,7 @@ export default function StudentsPage() {
           <div style={{ position: 'relative', marginBottom: 14 }}>
             <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 14, color: '#9ca3af' }}>🔍</span>
             <input className="search-input" value={search} onChange={e => setSearch(e.target.value)}
-              placeholder={`ค้นหาในห้อง ${room?.name}...`} />
+              placeholder={`ค้นหาชื่อ, เลขที่ หรือรหัสใน ${room?.name}...`} />
           </div>
 
           {/* Student List */}
@@ -206,44 +273,76 @@ export default function StudentsPage() {
             </div>
           ) : (
             <div style={{ background: '#ffffff', border: '1px solid #e8eaed', borderRadius: 14, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', animation: 'slideUp 0.3s ease' }}>
+
               {/* Header row */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', background: '#f9fafb', borderBottom: '1px solid #f3f4f6' }}>
+                <div style={{ width: 32, textAlign: 'center', fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ที่</div>
                 <div style={{ width: 32, flexShrink: 0 }} />
                 <div style={{ flex: 1, fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' }}>ชื่อ-นามสกุล</div>
+                <div style={{ width: 52, fontSize: 11, fontWeight: 600, color: '#6b7280', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.05em' }}>เพศ</div>
                 <div style={{ width: 60, fontSize: 11, fontWeight: 600, color: '#6b7280', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.05em' }}>รหัส</div>
-                <div style={{ width: 50 }} />
+                <div style={{ width: 36 }} />
               </div>
 
-              {filtered.map((s, i) => (
-                <div key={s.id} className="stu-row" style={{ animation: `slideUp 0.2s ease ${i * 0.04}s both` }}>
-                  <div style={{
-                    width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-                    background: AVATAR_COLORS[i % AVATAR_COLORS.length],
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 12, fontWeight: 700, color: '#fff',
-                  }}>
-                    {s.full_name[0]}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {s.full_name}
+              {filtered.map((s, i) => {
+                const gender = genderLabel(s.gender)
+                return (
+                  <div key={s.id} className="stu-row" style={{ animation: `slideUp 0.2s ease ${i * 0.04}s both` }}>
+                    {/* เลขที่ */}
+                    <div style={{ width: 32, textAlign: 'center', flexShrink: 0 }}>
+                      {s.seat_number ? (
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#1a1f2e' }}>{s.seat_number}</span>
+                      ) : (
+                        <span style={{ fontSize: 11, color: '#d1d5db' }}>—</span>
+                      )}
                     </div>
+
+                    {/* Avatar */}
+                    <div style={{
+                      width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                      background: s.gender === 'female' ? '#f472b6' : s.gender === 'male' ? '#60a5fa' : AVATAR_COLORS[i % AVATAR_COLORS.length],
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 12, fontWeight: 700, color: '#fff',
+                    }}>
+                      {s.full_name[0]}
+                    </div>
+
+                    {/* ชื่อ */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {s.full_name}
+                      </div>
+                    </div>
+
+                    {/* เพศ */}
+                    <div style={{ width: 52, textAlign: 'center' }}>
+                      {gender ? (
+                        <span style={{ fontSize: 11, color: gender.color, background: gender.bg, padding: '2px 8px', borderRadius: 99, fontWeight: 600 }}>
+                          {gender.text}
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: 11, color: '#d1d5db' }}>—</span>
+                      )}
+                    </div>
+
+                    {/* รหัส */}
+                    <div style={{ width: 60, textAlign: 'center' }}>
+                      {s.code ? (
+                        <span style={{ fontSize: 11, color: '#6b7280', background: '#f3f4f6', padding: '2px 8px', borderRadius: 99 }}>{s.code}</span>
+                      ) : (
+                        <span style={{ fontSize: 11, color: '#d1d5db' }}>—</span>
+                      )}
+                    </div>
+
+                    <button className="del-btn" onClick={() => deleteStudent(s.id)}>ลบ</button>
                   </div>
-                  <div style={{ width: 60, textAlign: 'center' }}>
-                    {s.code ? (
-                      <span style={{ fontSize: 11, color: '#6b7280', background: '#f3f4f6', padding: '2px 8px', borderRadius: 99 }}>{s.code}</span>
-                    ) : (
-                      <span style={{ fontSize: 11, color: '#d1d5db' }}>—</span>
-                    )}
-                  </div>
-                  <button className="del-btn" onClick={() => deleteStudent(s.id)}>ลบ</button>
-                </div>
-              ))}
+                )
+              })}
 
               {/* Footer */}
               <div style={{ padding: '10px 16px', background: '#f9fafb', borderTop: '1px solid #f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span style={{ fontSize: 11, color: '#9ca3af' }}>
-                  {search ? `พบ ${filtered.length} จาก ${students.length} คน` : `ทั้งหมด ${students.length} คน`}
+                  {search ? `พบ ${filtered.length} จาก ${students.length} คน` : `ทั้งหมด ${students.length} คน · ชาย ${maleCount} · หญิง ${femaleCount}`}
                 </span>
                 <button onClick={() => setShowAdd(true)} style={{
                   background: 'none', border: 'none', cursor: 'pointer',
