@@ -32,7 +32,6 @@ export default function RoomPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
 
-    // วันนี้ในรูปแบบ YYYY-MM-DD
     const todayStr = new Date().toISOString().split('T')[0]
 
     const [
@@ -44,30 +43,28 @@ export default function RoomPage() {
     ] = await Promise.all([
       supabase.from('rooms').select('*').eq('id', roomId).single(),
       supabase.from('students').select('*').eq('room_id', roomId).eq('is_active', true),
-      // เช็คชื่อวันนี้ — นับเฉพาะ status = 'present'
       supabase.from('attendance')
         .select('id', { count: 'exact' })
         .eq('room_id', roomId)
         .eq('date', todayStr)
         .eq('status', 'present'),
-      // อาหารวันนี้
       supabase.from('food_records')
         .select('id', { count: 'exact' })
         .eq('room_id', roomId)
         .eq('date', todayStr),
-      // ออมเงินรวมทั้งหมด
       supabase.from('savings')
-        .select('amount')
+        .select('deposit, withdraw')   // ✅ แก้จาก amount
         .eq('room_id', roomId),
     ])
 
     setRoom(roomData)
-    // เรียงตาม seat_number ถ้ามี
     const sorted = (studs || []).sort((a, b) => (a.seat_number ?? 9999) - (b.seat_number ?? 9999))
     setStudents(sorted)
 
-    // คำนวณออมเงินรวม
-    const totalSavings = (savingsData || []).reduce((sum, r) => sum + (r.amount || 0), 0)
+    // ✅ แก้สูตรคำนวณ
+    const totalSavings = (savingsData || []).reduce(
+      (sum, r) => sum + (r.deposit || 0) - (r.withdraw || 0), 0
+    )
 
     setQuickStats({
       attendance: attendanceData?.length ?? 0,
@@ -79,7 +76,7 @@ export default function RoomPage() {
   }
 
   if (loading) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f4f5f7', fontFamily: 'Noto Sans Thai, sans-serif' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f4f5f7', fontFamily: 'Noto Sans Thai, sans-serif', minHeight: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#9ca3af', fontSize: 14 }}>
         <span style={{ fontSize: 20 }}>⏳</span> กำลังโหลด...
       </div>
@@ -88,7 +85,6 @@ export default function RoomPage() {
 
   const today = new Date().toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
 
-  // format ตัวเลขออมเงิน
   const formatSavings = (val) => {
     if (val === null) return '—'
     if (val >= 1000) return `${(val / 1000).toFixed(1)}k`
@@ -109,17 +105,13 @@ export default function RoomPage() {
         .stu-row:last-child { border-bottom: none; }
       `}</style>
 
-      <div style={{ minHeight: '100vh', background: '#f4f5f7', fontFamily: 'Noto Sans Thai, sans-serif' }}>
+      {/* ✅ แก้ wrapper — เอา minHeight: 100vh ออก เปลี่ยนเป็น minHeight: 100% */}
+      <div style={{ background: '#f4f5f7', fontFamily: 'Noto Sans Thai, sans-serif', minHeight: '100%' }}>
 
         {/* ── Header ── */}
         <div style={{ background: 'linear-gradient(135deg, #1a1f2e 0%, #252d42 100%)', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }}>
+          {/* ✅ ลบปุ่ม ← กลับ ออกแล้ว เหลือแค่ชื่อห้องและปุ่มจัดการนักเรียน */}
           <div style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid #252b3b' }}>
-            <button onClick={() => router.push('/dashboard')} style={{
-              background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
-              borderRadius: 8, padding: '5px 12px', cursor: 'pointer',
-              color: '#e2e8f0', fontSize: 12, fontFamily: 'inherit',
-              display: 'flex', alignItems: 'center', gap: 5,
-            }}>← กลับ</button>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9' }}>{room?.name}</div>
               <div style={{ fontSize: 11, color: '#6b7280' }}>
@@ -190,7 +182,7 @@ export default function RoomPage() {
             ))}
           </div>
 
-          {/* ── Quick Stats (ข้อมูลจริง) ── */}
+          {/* ── Quick Stats ── */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 20 }}>
             {[
               {
@@ -261,7 +253,6 @@ export default function RoomPage() {
                       </div>
                       {s.code && <div style={{ fontSize: 10, color: '#9ca3af' }}>รหัส {s.code}</div>}
                     </div>
-                    {/* แสดงเลขที่จริง ถ้าไม่มีใช้ลำดับในอาร์เรย์ */}
                     <div style={{ fontSize: 11, color: '#d1d5db', fontWeight: 500 }}>
                       #{s.seat_number ?? i + 1}
                     </div>
