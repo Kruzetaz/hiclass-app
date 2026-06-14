@@ -1,7 +1,8 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '../../lib/supabase'
+import Sidebar from '@/components/Sidebar'
 
 const NEWS = [
   {
@@ -34,66 +35,20 @@ const NEWS = [
   },
 ]
 
-function Sidebar({ active }) {
-  const router = useRouter()
-  const supabase = createClient()
-  const nav = [
-    { id: 'dashboard', label: 'ห้องเรียนของฉัน', icon: '🏠', href: '/dashboard' },
-    { id: 'news',      label: 'ประชาสัมพันธ์',    icon: '📢', href: '/news' },
-    { id: 'profile',   label: 'ข้อมูลส่วนตัว',    icon: '👤', href: '/profile' },
-    { id: 'upgrade',   label: 'สมัครแผน',          icon: '✨', href: '/upgrade' },
-  ]
-  async function logout() {
-    await supabase.auth.signOut()
-    router.push('/login')
-  }
-  return (
-    <aside style={{ width: 220, minWidth: 220, background: '#1a1f2e', display: 'flex', flexDirection: 'column', height: '100%', borderRight: '1px solid #252b3b' }}>
-      <div style={{ padding: '20px 18px 16px', borderBottom: '1px solid #252b3b' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #f5c842, #e6a800)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>🏫</div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 13, color: '#f5c842' }}>Class Smart</div>
-            <div style={{ fontSize: 10, color: '#6b7280' }}>Teacher</div>
-          </div>
-        </div>
-      </div>
-      <nav style={{ flex: 1, padding: '12px 10px' }}>
-        <div style={{ fontSize: 9, color: '#4b5563', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700, padding: '0 8px 6px' }}>เมนู</div>
-        {nav.map(item => {
-          const isActive = active === item.id
-          return (
-            <button key={item.id} onClick={() => router.push(item.href)}
-              style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '9px 10px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: isActive ? 600 : 500, textAlign: 'left', background: isActive ? 'rgba(245,200,66,0.12)' : 'transparent', color: isActive ? '#f5c842' : '#9ca3af', transition: 'all 0.15s', marginBottom: 2, ...(isActive ? { boxShadow: 'inset 3px 0 0 #f5c842', paddingLeft: 13 } : {}) }}
-              onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = '#252b3b'; e.currentTarget.style.color = '#e2e8f0' } }}
-              onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#9ca3af' } }}>
-              <span style={{ fontSize: 14 }}>{item.icon}</span>{item.label}
-            </button>
-          )
-        })}
-      </nav>
-      <div style={{ margin: '0 10px 8px', padding: '10px 12px', borderRadius: 10, background: '#252b3b', border: '1px solid #2d3449' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-          <span style={{ fontSize: 9, color: '#6b7280', textTransform: 'uppercase', fontWeight: 700 }}>Storage</span>
-          <span style={{ fontSize: 9, color: '#6b7280' }}>0%</span>
-        </div>
-        <div style={{ height: 3, background: '#374151', borderRadius: 99 }}>
-          <div style={{ height: 3, width: '0%', background: '#f5c842', borderRadius: 99 }} />
-        </div>
-      </div>
-      <div style={{ borderTop: '1px solid #252b3b' }}>
-        <button onClick={logout} style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '12px 18px', border: 'none', cursor: 'pointer', background: 'transparent', fontSize: 12, color: '#ef4444', transition: 'background 0.15s' }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)' }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
-          <span>🚪</span> ออกจากระบบ
-        </button>
-      </div>
-    </aside>
-  )
-}
-
 export default function NewsPage() {
   const [selected, setSelected] = useState(null)
+  const [profile, setProfile] = useState(null)
+
+  useEffect(() => {
+    async function load() {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+      setProfile(data)
+    }
+    load()
+  }, [])
 
   return (
     <>
@@ -110,7 +65,7 @@ export default function NewsPage() {
       `}</style>
 
       <div style={{ display: 'flex', height: '100vh', background: '#f4f5f7', overflow: 'hidden' }}>
-        <Sidebar active="news" />
+        <Sidebar profile={profile} active="news" />
 
         <main style={{ flex: 1, overflowY: 'auto' }}>
           {/* Topbar */}
@@ -121,7 +76,7 @@ export default function NewsPage() {
           </div>
 
           <div style={{ padding: 24 }}>
-            {/* Header */}
+            {/* Banner */}
             <div style={{ background: 'linear-gradient(135deg, #1a1f2e 0%, #252d42 100%)', borderRadius: 16, padding: '20px 24px', marginBottom: 20, position: 'relative', overflow: 'hidden', boxShadow: '0 4px 20px rgba(0,0,0,0.12)' }}>
               <div style={{ position: 'absolute', top: -15, right: -15, width: 100, height: 100, borderRadius: '50%', background: 'rgba(245,200,66,0.06)', border: '1px solid rgba(245,200,66,0.1)' }} />
               <div style={{ fontSize: 10, color: '#f5c842', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>📌 ข่าวสารล่าสุด</div>
@@ -132,8 +87,7 @@ export default function NewsPage() {
             {/* News Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>
               {NEWS.map((n, i) => (
-                <div key={n.id} className="news-card"
-                  onClick={() => setSelected(n)}
+                <div key={n.id} className="news-card" onClick={() => setSelected(n)}
                   style={{ animation: `slideUp 0.25s ease ${i * 0.06}s both` }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -168,8 +122,7 @@ export default function NewsPage() {
             </div>
             <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', marginBottom: 10, lineHeight: 1.5 }}>{selected.title}</div>
             <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.8, borderTop: '1px solid #f3f4f6', paddingTop: 12 }}>{selected.full}</div>
-            <button onClick={() => setSelected(null)}
-              style={{ marginTop: 20, width: '100%', padding: '10px', borderRadius: 10, border: 'none', cursor: 'pointer', background: 'linear-gradient(135deg, #f5c842, #e6a800)', color: '#1a1f2e', fontWeight: 700, fontSize: 13, fontFamily: 'inherit' }}>
+            <button onClick={() => setSelected(null)} style={{ marginTop: 20, width: '100%', padding: '10px', borderRadius: 10, border: 'none', cursor: 'pointer', background: 'linear-gradient(135deg, #f5c842, #e6a800)', color: '#1a1f2e', fontWeight: 700, fontSize: 13, fontFamily: 'inherit' }}>
               ปิด
             </button>
           </div>

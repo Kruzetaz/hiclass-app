@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '../../lib/supabase'
+import Sidebar from '@/components/Sidebar'
 
 const btnGold = {
   padding: '9px 18px', borderRadius: 8, border: 'none', cursor: 'pointer',
@@ -10,98 +11,6 @@ const btnGold = {
   boxShadow: '0 4px 14px rgba(245,200,66,0.35)',
   transition: 'all 0.15s', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
   fontFamily: 'inherit',
-}
-
-function Sidebar({ profile, active }) {
-  const router = useRouter()
-  const supabase = createClient()
-
-  const nav = [
-    { id: 'dashboard', label: 'ห้องเรียนของฉัน', icon: '🏠' },
-    { id: 'news',      label: 'ประชาสัมพันธ์',    icon: '📢' },
-    { id: 'profile',   label: 'ข้อมูลส่วนตัว',    icon: '👤' },
-    { id: 'upgrade',   label: 'สมัครแผน',          icon: '✨' },
-  ]
-
-  async function logout() {
-    await supabase.auth.signOut()
-    router.push('/login')
-  }
-
-  return (
-    <aside style={{
-      width: 220, minWidth: 220, background: '#1a1f2e',
-      display: 'flex', flexDirection: 'column', height: '100%',
-      borderRight: '1px solid #252b3b',
-    }}>
-      <div style={{ padding: '20px 18px 16px', borderBottom: '1px solid #252b3b' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #f5c842, #e6a800)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>🏫</div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 13, color: '#f5c842', lineHeight: 1.2 }}>Class Smart</div>
-            <div style={{ fontSize: 10, color: '#6b7280', lineHeight: 1.2 }}>Teacher</div>
-          </div>
-        </div>
-      </div>
-
-      {profile && (
-        <div style={{ margin: '12px 10px 0', padding: '10px 12px', borderRadius: 10, background: '#252b3b', border: '1px solid #2d3449' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg, #f5c842, #e6a800)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#1a1f2e', flexShrink: 0 }}>
-              {(profile.full_name || 'T')[0]}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {profile.full_name || 'คุณครู'}
-              </div>
-              <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 99, background: '#1a3a2a', color: '#4ade80', fontWeight: 600 }}>
-                {profile.plan_id === 'free' ? 'ฟรี' : 'Pro'}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <nav style={{ flex: 1, padding: '12px 10px', overflowY: 'auto' }}>
-        <div style={{ fontSize: 9, color: '#4b5563', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700, padding: '0 8px 6px' }}>เมนู</div>
-        {nav.map(item => {
-          const isActive = active === item.id
-          return (
-            <button key={item.id}
-              onClick={() => router.push(`/${item.id}`)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 9, width: '100%',
-                padding: '9px 10px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                fontSize: 12, fontWeight: isActive ? 600 : 500, textAlign: 'left',
-                background: isActive ? 'rgba(245,200,66,0.12)' : 'transparent',
-                color: isActive ? '#f5c842' : '#9ca3af',
-                transition: 'all 0.15s', marginBottom: 2, fontFamily: 'inherit',
-                ...(isActive ? { boxShadow: 'inset 3px 0 0 #f5c842', paddingLeft: 13 } : {}),
-              }}>
-              <span style={{ fontSize: 14 }}>{item.icon}</span>
-              {item.label}
-            </button>
-          )
-        })}
-      </nav>
-
-      <div style={{ margin: '0 10px 8px', padding: '10px 12px', borderRadius: 10, background: '#252b3b', border: '1px solid #2d3449' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-          <span style={{ fontSize: 9, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Storage</span>
-          <span style={{ fontSize: 9, color: '#6b7280' }}>0%</span>
-        </div>
-        <div style={{ height: 3, background: '#374151', borderRadius: 99 }}>
-          <div style={{ height: 3, width: '0%', background: '#f5c842', borderRadius: 99 }} />
-        </div>
-      </div>
-
-      <div style={{ borderTop: '1px solid #252b3b' }}>
-        <button onClick={logout} style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '12px 18px', border: 'none', cursor: 'pointer', background: 'transparent', fontSize: 12, fontWeight: 500, color: '#ef4444', fontFamily: 'inherit' }}>
-          <span>🚪</span> ออกจากระบบ
-        </button>
-      </div>
-    </aside>
-  )
 }
 
 export default function ProfilePage() {
@@ -120,12 +29,9 @@ export default function ProfilePage() {
       const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
       setProfile(data)
       setForm({
-        full_name: data?.full_name || '',
-        nickname: data?.nickname || '',
-        phone: data?.phone || '',
-        school_name: data?.school_name || '',
-        district: data?.district || '',
-        province: data?.province || '',
+        full_name: data?.full_name || '', nickname: data?.nickname || '',
+        phone: data?.phone || '', school_name: data?.school_name || '',
+        district: data?.district || '', province: data?.province || '',
       })
       setLoading(false)
     }
@@ -173,8 +79,6 @@ export default function ProfilePage() {
         <Sidebar profile={profile} active="profile" />
 
         <main style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-
-          {/* Topbar */}
           <div style={{ position: 'sticky', top: 0, zIndex: 10, background: '#ffffff', borderBottom: '1px solid #e9eaec', boxShadow: '0 1px 3px rgba(0,0,0,0.04)', padding: '11px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ fontSize: 16 }}>👤</span>
@@ -193,8 +97,6 @@ export default function ProfilePage() {
           </div>
 
           <div style={{ flex: 1, padding: '24px', maxWidth: 800, margin: '0 auto', width: '100%' }}>
-
-            {/* Profile Header */}
             <div style={{ background: 'linear-gradient(135deg, #1a1f2e, #252d42)', borderRadius: 16, padding: '24px 28px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 20, animation: 'slideUp 0.3s ease', boxShadow: '0 4px 20px rgba(0,0,0,0.12)' }}>
               <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'linear-gradient(135deg, #f5c842, #e6a800)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, flexShrink: 0, boxShadow: '0 4px 16px rgba(245,200,66,0.4)' }}>
                 {(form.full_name || 'T')[0]}
@@ -211,11 +113,8 @@ export default function ProfilePage() {
               </button>
             </div>
 
-            {/* Form Card */}
             <div style={{ background: '#ffffff', border: '1px solid #e9eaec', borderRadius: 16, padding: '24px 28px', marginBottom: 20, animation: 'slideUp 0.3s ease 0.05s both', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#111827', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
-                ✏️ แก้ไขข้อมูล
-              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#111827', marginBottom: 20 }}>✏️ แก้ไขข้อมูล</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 {fields.map(f => (
                   <div key={f.key} style={{ gridColumn: `span ${f.span}` }}>
@@ -223,14 +122,12 @@ export default function ProfilePage() {
                       {f.icon} {f.label} {f.required && <span style={{ color: '#f5c842' }}>*</span>}
                     </label>
                     <input className="field-input" type="text" value={form[f.key]}
-                      onChange={e => update(f.key, e.target.value)}
-                      placeholder={f.placeholder} />
+                      onChange={e => update(f.key, e.target.value)} placeholder={f.placeholder} />
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Save Button */}
             <button onClick={handleSave} disabled={saving} style={{
               width: '100%', padding: '14px', borderRadius: 12, border: 'none', cursor: 'pointer',
               fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
